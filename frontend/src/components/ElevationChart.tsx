@@ -10,10 +10,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useStore } from "@/lib/store";
+import { useTranslation } from "@/lib/i18n";
 
 export function ElevationChart() {
   const route = useStore((s) => s.route);
   const setHoveredRoutePoint = useStore((s) => s.setHoveredRoutePoint);
+  const { t } = useTranslation();
 
   const profile = route?.elevation_profile;
 
@@ -54,7 +56,7 @@ export function ElevationChart() {
   return (
     <div className="absolute bottom-4 left-4 right-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur rounded-xl shadow-lg p-3 max-w-2xl mx-auto">
       <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-        Elevation profile
+        {t("elevationProfile")}
       </div>
       <ResponsiveContainer width="100%" height={120}>
         <AreaChart
@@ -84,7 +86,7 @@ export function ElevationChart() {
             width={45}
           />
           <Tooltip
-            formatter={(value: number) => [`${value} m`, "Elevation"]}
+            formatter={(value: number) => [`${value} m`, t("elevation")]}
             labelFormatter={(label: number) => `${label.toFixed(2)} km`}
             contentStyle={{ fontSize: 12 }}
           />

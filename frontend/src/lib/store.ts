@@ -1,9 +1,14 @@
 import { create } from "zustand";
 import type { RouteFeature, SavedRoute } from "./api";
 
+export type Locale = "en" | "fr";
 export type AppMode = "idle" | "generating" | "drawing" | "viewing";
 
 interface RouteState {
+  // Locale
+  locale: Locale;
+  setLocale: (l: Locale) => void;
+
   // App mode
   mode: AppMode;
   setMode: (mode: AppMode) => void;
@@ -46,6 +51,12 @@ interface RouteState {
 }
 
 export const useStore = create<RouteState>((set) => ({
+  locale: "en",
+  setLocale: (locale) => {
+    if (typeof window !== "undefined") localStorage.setItem("locale", locale);
+    set({ locale });
+  },
+
   mode: "idle",
   setMode: (mode) => set({ mode }),
 
@@ -80,3 +91,11 @@ export const useStore = create<RouteState>((set) => ({
   error: null,
   setError: (error) => set({ error }),
 }));
+
+// Hydrate locale from localStorage on client
+if (typeof window !== "undefined") {
+  const saved = localStorage.getItem("locale");
+  if (saved === "fr" || saved === "en") {
+    useStore.setState({ locale: saved });
+  }
+}

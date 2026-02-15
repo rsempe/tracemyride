@@ -3,9 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { api, type SavedRoute } from "@/lib/api";
 import { useStore } from "@/lib/store";
+import { useTranslation } from "@/lib/i18n";
 
 export function SavedRoutesList() {
   const { savedRoutes, setSavedRoutes, setRoute, setMode, route } = useStore();
+  const { t } = useTranslation();
   const [showSave, setShowSave] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -28,7 +30,7 @@ export function SavedRoutesList() {
     setSaving(true);
     try {
       await api.saveRoute({
-        name: name || "Unnamed route",
+        name: name || t("unnamedRoute"),
         geojson: {
           type: route.type,
           geometry: route.geometry,
@@ -81,13 +83,13 @@ export function SavedRoutesList() {
               onClick={() => setShowSave(true)}
               className="w-full py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Save
+              {t("save")}
             </button>
           ) : (
             <div className="space-y-2">
               <input
                 type="text"
-                placeholder="Route name"
+                placeholder={t("routeName")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -100,13 +102,13 @@ export function SavedRoutesList() {
                   disabled={saving}
                   className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 >
-                  {saving ? "..." : "Save"}
+                  {saving ? "..." : t("save")}
                 </button>
                 <button
                   onClick={() => setShowSave(false)}
                   className="py-2 px-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
               </div>
             </div>
@@ -117,10 +119,10 @@ export function SavedRoutesList() {
       {/* Saved routes list */}
       <div className="p-4 overflow-y-auto flex-1">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-          My routes
+          {t("myRoutes")}
         </h2>
         {savedRoutes.length === 0 ? (
-          <p className="text-sm text-gray-400 dark:text-gray-500">No saved routes</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500">{t("noSavedRoutes")}</p>
         ) : (
           <div className="space-y-2">
             {savedRoutes.map((r: SavedRoute) => (
@@ -145,7 +147,7 @@ export function SavedRoutesList() {
                     onClick={() => handleDelete(r.id)}
                     className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-xs ml-2 mt-1"
                   >
-                    Delete
+                    {t("delete")}
                   </button>
                 </div>
               </div>

@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useStore } from "@/lib/store";
+import { useTranslation } from "@/lib/i18n";
 import { useRouteGeneration } from "@/hooks/useRouteGeneration";
 import { useRouteDrawing } from "@/hooks/useRouteDrawing";
 import { SavedRoutesList } from "@/components/SavedRoutesList";
@@ -53,6 +54,7 @@ export function RoutePanel() {
     drawingWaypoints,
   } = useStore();
 
+  const { t, locale, setLocale } = useTranslation();
   const { generate, clear } = useRouteGeneration();
   const { startDrawing, finishDrawing, cancelDrawing, undo } = useRouteDrawing();
 
@@ -60,9 +62,33 @@ export function RoutePanel() {
     <div className="w-80 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-y-auto">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">TraceMyRide</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">TraceMyRide</h1>
+          <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600 text-xs">
+            <button
+              onClick={() => setLocale("en")}
+              className={`px-2 py-1 font-medium transition-colors ${
+                locale === "en"
+                  ? "bg-blue-500 text-white"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+              }`}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setLocale("fr")}
+              className={`px-2 py-1 font-medium transition-colors ${
+                locale === "fr"
+                  ? "bg-blue-500 text-white"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+              }`}
+            >
+              FR
+            </button>
+          </div>
+        </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Route generator
+          {t("appSubtitle")}
         </p>
       </div>
 
@@ -71,7 +97,7 @@ export function RoutePanel() {
         {/* Distance slider */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Distance: {distanceKm} km
+            {t("distance")}: {distanceKm} km
           </label>
           <input
             type="range"
@@ -92,7 +118,7 @@ export function RoutePanel() {
         {/* Loop toggle */}
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Loop
+            {t("loop")}
           </span>
           <button
             onClick={() => setLoop(!loop)}
@@ -112,7 +138,7 @@ export function RoutePanel() {
         {/* Elevation target */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Elevation target: {elevationTarget ? `${elevationTarget} m` : "Auto"}
+            {t("elevationTarget")}: {elevationTarget ? `${elevationTarget} m` : t("auto")}
           </label>
           <input
             type="range"
@@ -128,7 +154,7 @@ export function RoutePanel() {
             disabled={mode === "generating"}
           />
           <div className="flex justify-between text-xs text-gray-400">
-            <span>Auto</span>
+            <span>{t("auto")}</span>
             <span>2500 m</span>
           </div>
         </div>
@@ -139,7 +165,7 @@ export function RoutePanel() {
           disabled={loading || mode === "drawing"}
           className="w-full py-2.5 px-4 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
         >
-          {loading ? "Generating..." : "Generate route"}
+          {loading ? t("generating") : t("generateRoute")}
         </button>
 
         {/* Drawing controls */}
@@ -150,7 +176,7 @@ export function RoutePanel() {
               disabled={loading}
               className="flex-1 py-2 px-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors"
             >
-              Draw
+              {t("draw")}
             </button>
           ) : (
             <>
@@ -159,14 +185,14 @@ export function RoutePanel() {
                 disabled={drawingWaypoints.length === 0}
                 className="flex-1 py-2 px-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm transition-colors disabled:opacity-50"
               >
-                Undo
+                {t("undo")}
               </button>
               <button
                 onClick={finishDrawing}
                 disabled={drawingWaypoints.length < 2}
                 className="flex-1 py-2 px-3 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
-                Confirm
+                {t("confirm")}
               </button>
               <button
                 onClick={cancelDrawing}
@@ -185,13 +211,13 @@ export function RoutePanel() {
               onClick={clear}
               className="flex-1 py-2 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg text-sm transition-colors"
             >
-              Clear
+              {t("clear")}
             </button>
             <button
               onClick={() => exportGpx(route)}
               className="flex-1 py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Export GPX
+              {t("exportGpx")}
             </button>
           </div>
         )}

@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { api } from "@/lib/api";
 import { useStore } from "@/lib/store";
+import { useTranslation } from "@/lib/i18n";
 
 export function useRouteDrawing() {
   const {
@@ -15,6 +16,8 @@ export function useRouteDrawing() {
     drawingWaypoints,
   } = useStore();
 
+  const { t } = useTranslation();
+
   const startDrawing = useCallback(() => {
     setRoute(null);
     clearWaypoints();
@@ -24,7 +27,7 @@ export function useRouteDrawing() {
 
   const finishDrawing = useCallback(async () => {
     if (drawingWaypoints.length < 2) {
-      setError("Placez au moins 2 points sur la carte.");
+      setError(t("drawMinPoints"));
       return;
     }
 
@@ -37,11 +40,11 @@ export function useRouteDrawing() {
       clearWaypoints();
       setMode("viewing");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur de snap-to-road");
+      setError(err instanceof Error ? err.message : t("snapError"));
     } finally {
       setLoading(false);
     }
-  }, [drawingWaypoints, setLoading, setError, setRoute, clearWaypoints, setMode]);
+  }, [drawingWaypoints, setLoading, setError, setRoute, clearWaypoints, setMode, t]);
 
   const cancelDrawing = useCallback(() => {
     clearWaypoints();

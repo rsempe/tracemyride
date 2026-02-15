@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { api } from "@/lib/api";
 import { useStore } from "@/lib/store";
+import { useTranslation } from "@/lib/i18n";
 
 export function useRouteGeneration() {
   const {
@@ -16,9 +17,11 @@ export function useRouteGeneration() {
     setError,
   } = useStore();
 
+  const { t } = useTranslation();
+
   const generate = useCallback(async () => {
     if (!userLocation) {
-      setError("Click on the map to place the starting point.");
+      setError(t("clickToPlaceStart"));
       return;
     }
 
@@ -37,12 +40,12 @@ export function useRouteGeneration() {
       setRoute(result);
       setMode("viewing");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation error");
+      setError(err instanceof Error ? err.message : t("generationError"));
       setMode("idle");
     } finally {
       setLoading(false);
     }
-  }, [userLocation, distanceKm, loop, elevationTarget, setRoute, setMode, setLoading, setError]);
+  }, [userLocation, distanceKm, loop, elevationTarget, setRoute, setMode, setLoading, setError, t]);
 
   const clear = useCallback(() => {
     setRoute(null);
