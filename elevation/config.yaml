@@ -1,0 +1,5 @@
+datasets:
+  - name: srtm30m
+    path: /app/data/srtm30m/
+    filename_epsg: 4326
+    filename_tile_size: 1

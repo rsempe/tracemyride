@@ -1,0 +1,71 @@
+services:
+  db:
+    image: imresamu/postgis:16-3.4-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tracemyride}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tracemyride}
+      POSTGRES_DB: ${POSTGRES_DB:-tracemyride}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracemyride"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://tracemyride:tracemyride@db:5432/tracemyride}
+      VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
+      ELEVATION_URL: ${ELEVATION_URL:-http://elevation:5001}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+  valhalla:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./valhalla/data:/custom_files
+    environment:
+      use_tiles_ignore_pbf: "False"
+      build_elevation: "False"
+      build_admins: "False"
+      build_time_zones: "False"
+      force_rebuild: "False"
+      server_threads: 2
+
+  elevation:
+    build: ./elevation
+    ports:
+      - "5001:5001"
+    environment:
+      FLASK_APP: opentopodata/api.py
+      DISABLE_MEMCACHE: "1"
+      CONFIG_PATH: /app/data/config.yaml
+    volumes:
+      - ./elevation/config.yaml:/app/data/config.yaml
+      - ./elevation/data:/app/data/srtm30m
+
+volumes:
+  pgdata:
