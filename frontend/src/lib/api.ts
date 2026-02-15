@@ -18,6 +18,7 @@ export interface GenerateParams {
   distance_km: number;
   loop: boolean;
   elevation_target?: number;
+  prefer_trails?: boolean;
 }
 
 export interface RouteFeature {
@@ -43,6 +44,33 @@ export interface SavedRoute {
 export interface SavedRouteDetail extends SavedRoute {
   geojson: RouteFeature;
   elevation_profile: { distance_km: number; elevation: number | null }[] | null;
+}
+
+export interface ExploredRouteData {
+  osm_id: number;
+  name: string | null;
+  ref: string | null;
+  route_type: string;
+  network: string | null;
+  distance: number | null;
+  geojson: {
+    type: "Feature";
+    geometry: { type: string; coordinates: number[][] | number[][][] };
+    properties: Record<string, unknown>;
+  };
+}
+
+export interface ExploreParams {
+  lat: number;
+  lng: number;
+  radius_km: number;
+  route_types: string[];
+}
+
+export interface ExploreResponse {
+  routes: ExploredRouteData[];
+  query_center: { lat: number; lng: number };
+  query_radius_km: number;
 }
 
 export const api = {
@@ -87,4 +115,10 @@ export const api = {
 
   deleteRoute: (id: string) =>
     request<{ ok: boolean }>(`/api/v1/routes/${id}`, { method: "DELETE" }),
+
+  explore: (params: ExploreParams) =>
+    request<ExploreResponse>("/api/v1/explore", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
 };

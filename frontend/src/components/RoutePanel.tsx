@@ -5,7 +5,9 @@ import { useStore } from "@/lib/store";
 import { useTranslation } from "@/lib/i18n";
 import { useRouteGeneration } from "@/hooks/useRouteGeneration";
 import { useRouteDrawing } from "@/hooks/useRouteDrawing";
+import { useExplorer } from "@/hooks/useExplorer";
 import { SavedRoutesList } from "@/components/SavedRoutesList";
+import { ExplorerPanel } from "@/components/ExplorerPanel";
 import type { RouteFeature } from "@/lib/api";
 
 function exportGpx(route: RouteFeature) {
@@ -46,6 +48,8 @@ export function RoutePanel() {
     setDistanceKm,
     loop,
     setLoop,
+    preferTrails,
+    setPreferTrails,
     elevationTarget,
     setElevationTarget,
     route,
@@ -57,6 +61,15 @@ export function RoutePanel() {
   const { t, locale, setLocale } = useTranslation();
   const { generate, clear } = useRouteGeneration();
   const { startDrawing, finishDrawing, cancelDrawing, undo } = useRouteDrawing();
+  const { explore } = useExplorer();
+
+  if (mode === "exploring") {
+    return (
+      <div className="w-80 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-y-auto">
+        <ExplorerPanel />
+      </div>
+    );
+  }
 
   return (
     <div className="w-80 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-y-auto">
@@ -135,6 +148,26 @@ export function RoutePanel() {
           </button>
         </div>
 
+        {/* Prefer trails toggle */}
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {t("preferTrails")}
+          </span>
+          <button
+            onClick={() => setPreferTrails(!preferTrails)}
+            disabled={mode === "generating"}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              preferTrails ? "bg-blue-500" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                preferTrails ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
         {/* Elevation target */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -203,6 +236,17 @@ export function RoutePanel() {
             </>
           )}
         </div>
+
+        {/* Explore button */}
+        {mode !== "drawing" && (
+          <button
+            onClick={explore}
+            disabled={loading}
+            className="w-full py-2 px-4 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            {t("explore")}
+          </button>
+        )}
 
         {/* Clear + Export */}
         {route && mode === "viewing" && (

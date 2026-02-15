@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import type { RouteFeature, SavedRoute } from "./api";
+import type { RouteFeature, SavedRoute, ExploredRouteData } from "./api";
 
 export type Locale = "en" | "fr";
-export type AppMode = "idle" | "generating" | "drawing" | "viewing";
+export type AppMode = "idle" | "generating" | "drawing" | "viewing" | "exploring";
 
 interface RouteState {
   // Locale
@@ -20,6 +20,8 @@ interface RouteState {
   setLoop: (l: boolean) => void;
   elevationTarget: number | null;
   setElevationTarget: (e: number | null) => void;
+  preferTrails: boolean;
+  setPreferTrails: (p: boolean) => void;
 
   // Current route
   route: RouteFeature | null;
@@ -38,6 +40,16 @@ interface RouteState {
   // User location
   userLocation: [number, number] | null;
   setUserLocation: (loc: [number, number] | null) => void;
+
+  // Explorer
+  explorerRoutes: ExploredRouteData[];
+  setExplorerRoutes: (routes: ExploredRouteData[]) => void;
+  selectedExplorerId: number | null;
+  setSelectedExplorerId: (id: number | null) => void;
+  explorerRadius: number;
+  setExplorerRadius: (r: number) => void;
+  explorerRouteTypes: string[];
+  setExplorerRouteTypes: (types: string[]) => void;
 
   // Hovered point on elevation profile (for map sync)
   hoveredRoutePoint: [number, number] | null;
@@ -66,6 +78,8 @@ export const useStore = create<RouteState>((set) => ({
   setLoop: (loop) => set({ loop }),
   elevationTarget: null,
   setElevationTarget: (elevationTarget) => set({ elevationTarget }),
+  preferTrails: true,
+  setPreferTrails: (preferTrails) => set({ preferTrails }),
 
   route: null,
   setRoute: (route) => set({ route }),
@@ -82,6 +96,15 @@ export const useStore = create<RouteState>((set) => ({
 
   userLocation: null,
   setUserLocation: (userLocation) => set({ userLocation }),
+
+  explorerRoutes: [],
+  setExplorerRoutes: (explorerRoutes) => set({ explorerRoutes }),
+  selectedExplorerId: null,
+  setSelectedExplorerId: (selectedExplorerId) => set({ selectedExplorerId }),
+  explorerRadius: 5,
+  setExplorerRadius: (explorerRadius) => set({ explorerRadius }),
+  explorerRouteTypes: ["hiking", "foot"],
+  setExplorerRouteTypes: (explorerRouteTypes) => set({ explorerRouteTypes }),
 
   hoveredRoutePoint: null,
   setHoveredRoutePoint: (hoveredRoutePoint) => set({ hoveredRoutePoint }),

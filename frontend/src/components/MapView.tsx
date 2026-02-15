@@ -24,6 +24,9 @@ export default function MapView() {
   const setUserLocation = useStore((s) => s.setUserLocation);
   const userLocation = useStore((s) => s.userLocation);
   const hoveredRoutePoint = useStore((s) => s.hoveredRoutePoint);
+  const explorerRoutes = useStore((s) => s.explorerRoutes);
+  const selectedExplorerId = useStore((s) => s.selectedExplorerId);
+  const setSelectedExplorerId = useStore((s) => s.setSelectedExplorerId);
 
   // Initialize map
   useEffect(() => {
@@ -69,6 +72,38 @@ export default function MapView() {
           "circle-color": "#ef4444",
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff",
+        },
+      });
+
+      // Explorer routes source + layer
+      map.addSource("explorer-routes", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "explorer-routes-line",
+        type: "line",
+        source: "explorer-routes",
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 3,
+          "line-opacity": 0.5,
+        },
+      });
+
+      // Explorer selected route source + layer
+      map.addSource("explorer-selected", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "explorer-selected-line",
+        type: "line",
+        source: "explorer-selected",
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 5,
+          "line-opacity": 0.9,
         },
       });
     });
@@ -194,16 +229,113 @@ export default function MapView() {
     });
   }, [drawingWaypoints]);
 
+  // Update explorer routes layer
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const source = map.getSource("explorer-routes") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    const ROUTE_TYPE_COLORS: Record<string, string> = {
+      hiking: "#e74c3c",
+      foot: "#e67e22",
+      bicycle: "#2ecc71",
+      mtb: "#8e44ad",
+      running: "#3498db",
+    };
+
+    const features = explorerRoutes.map((r) => ({
+      ...r.geojson,
+      properties: {
+        ...r.geojson.properties,
+        color: ROUTE_TYPE_COLORS[r.route_type] || "#888888",
+      },
+    })) as GeoJSON.Feature[];
+
+    source.setData({ type: "FeatureCollection", features });
+  }, [explorerRoutes]);
+
+  // Update explorer selected route layer + fitBounds
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const source = map.getSource("explorer-selected") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    const ROUTE_TYPE_COLORS: Record<string, string> = {
+      hiking: "#e74c3c",
+      foot: "#e67e22",
+      bicycle: "#2ecc71",
+      mtb: "#8e44ad",
+      running: "#3498db",
+    };
+
+    if (selectedExplorerId == null) {
+      source.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+
+    const selected = explorerRoutes.find((r) => r.osm_id === selectedExplorerId);
+    if (!selected) {
+      source.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+
+    const feature = {
+      ...selected.geojson,
+      properties: {
+        ...selected.geojson.properties,
+        color: ROUTE_TYPE_COLORS[selected.route_type] || "#888888",
+      },
+    } as GeoJSON.Feature;
+    source.setData({ type: "FeatureCollection", features: [feature] });
+
+    // Fit bounds to selected route
+    const geom = selected.geojson.geometry;
+    const allCoords: number[][] =
+      geom.type === "MultiLineString"
+        ? (geom.coordinates as number[][][]).flat()
+        : (geom.coordinates as number[][]);
+
+    if (allCoords.length > 1) {
+      const bounds = allCoords.reduce(
+        (b, c) => b.extend(c as [number, number]),
+        new maplibregl.LngLatBounds(
+          allCoords[0] as [number, number],
+          allCoords[0] as [number, number]
+        )
+      );
+      map.fitBounds(bounds, { padding: 60 });
+    }
+  }, [selectedExplorerId, explorerRoutes]);
+
   // Click handler: drawing mode adds waypoints, idle/viewing repositions start marker
   const handleMapClick = useCallback(
     (e: maplibregl.MapMouseEvent) => {
       if (mode === "drawing") {
         addWaypoint([e.lngLat.lng, e.lngLat.lat]);
+      } else if (mode === "exploring") {
+        // Check if clicked on an explorer route
+        const map = mapRef.current;
+        if (map) {
+          const features = map.queryRenderedFeatures(e.point, {
+            layers: ["explorer-routes-line"],
+          });
+          if (features.length > 0) {
+            const osmId = features[0].properties?.osm_id;
+            if (osmId != null) {
+              setSelectedExplorerId(Number(osmId));
+              return;
+            }
+          }
+        }
       } else if (mode === "idle" || mode === "viewing") {
         setUserLocation([e.lngLat.lng, e.lngLat.lat]);
       }
     },
-    [mode, addWaypoint, setUserLocation]
+    [mode, addWaypoint, setUserLocation, setSelectedExplorerId]
   );
 
   useEffect(() => {
@@ -219,7 +351,7 @@ export default function MapView() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.getCanvas().style.cursor = mode === "drawing" ? "crosshair" : "";
+    map.getCanvas().style.cursor = mode === "drawing" ? "crosshair" : mode === "exploring" ? "pointer" : "";
   }, [mode]);
 
   // Elevation profile hover marker

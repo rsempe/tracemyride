@@ -10,6 +10,7 @@ export function useRouteGeneration() {
     distanceKm,
     loop,
     elevationTarget,
+    preferTrails,
     userLocation,
     setRoute,
     setMode,
@@ -36,6 +37,7 @@ export function useRouteGeneration() {
         distance_km: distanceKm,
         loop,
         elevation_target: elevationTarget ?? undefined,
+        prefer_trails: preferTrails,
       });
       setRoute(result);
       setMode("viewing");
@@ -45,7 +47,7 @@ export function useRouteGeneration() {
     } finally {
       setLoading(false);
     }
-  }, [userLocation, distanceKm, loop, elevationTarget, setRoute, setMode, setLoading, setError, t]);
+  }, [userLocation, distanceKm, loop, elevationTarget, preferTrails, setRoute, setMode, setLoading, setError, t]);
 
   const clear = useCallback(() => {
     setRoute(null);

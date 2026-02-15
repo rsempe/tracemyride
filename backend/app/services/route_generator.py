@@ -1,9 +1,13 @@
+import logging
 import math
 import random
 
 from app.services import elevation_service, valhalla_client
 from app.services.elevation_service import compute_elevation_stats, _batch_elevation_query
-from app.utils.geo import destination_point, haversine
+from app.services.overpass_client import get_trail_attractors
+from app.utils.geo import bearing as geo_bearing, destination_point, haversine
+
+logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 6
 TOLERANCE = 0.15  # 15% distance tolerance
@@ -18,24 +22,40 @@ async def generate_route(
     distance_km: float,
     loop: bool = True,
     elevation_target: float | None = None,
+    prefer_trails: bool = True,
 ) -> dict:
     """
     Generate a running route using the "Waypoint Fan" strategy.
 
-    When elevation_target is set, scouts terrain in all directions, orients
-    waypoints toward the highest ground, and iteratively adjusts to match
-    both the target distance and elevation gain.
+    When prefer_trails is set, fetches OSM trail data and biases waypoints
+    toward marked trails. When elevation_target is also set, combines both
+    elevation and trail density scoring to choose the best bearing.
     """
-    # Scout for uphill direction when elevation target is set
-    uphill_bearing = None
-    if elevation_target:
-        scout_radius = distance_km / (2 * math.pi) if loop else distance_km * 0.35
-        uphill_bearing = await _find_uphill_bearing(lat, lng, scout_radius)
+    scout_radius = distance_km / (2 * math.pi) if loop else distance_km * 0.35
+
+    # Fetch trail attractors if requested
+    trail_attractors: list[tuple[float, float]] = []
+    if prefer_trails:
+        try:
+            trail_attractors = await get_trail_attractors(
+                lat, lng, radius_km=scout_radius * 1.5
+            )
+        except Exception:
+            logger.warning("Failed to fetch trail attractors, continuing without")
+
+    # Determine best bearing
+    best_bearing: float | None = None
+    if elevation_target and trail_attractors:
+        best_bearing = await _find_best_bearing(lat, lng, scout_radius, trail_attractors)
+    elif elevation_target:
+        best_bearing = await _find_best_bearing(lat, lng, scout_radius, [])
+    elif trail_attractors:
+        best_bearing = _find_trail_bearing(lat, lng, trail_attractors)
 
     if loop:
-        result = await _generate_loop(lat, lng, distance_km, uphill_bearing, elevation_target)
+        result = await _generate_loop(lat, lng, distance_km, best_bearing, elevation_target, trail_attractors)
     else:
-        result = await _generate_out_and_back(lat, lng, distance_km, uphill_bearing, elevation_target)
+        result = await _generate_out_and_back(lat, lng, distance_km, best_bearing, elevation_target, trail_attractors)
 
     coords = result["coordinates"]
 
@@ -65,10 +85,15 @@ async def generate_route(
     }
 
 
-async def _find_uphill_bearing(lat: float, lng: float, radius_km: float) -> float:
+async def _find_best_bearing(
+    lat: float,
+    lng: float,
+    radius_km: float,
+    trail_attractors: list[tuple[float, float]],
+) -> float:
     """
-    Sample elevation at multiple bearings around the start point.
-    Returns the bearing (degrees) toward the highest ground.
+    Sample elevation at multiple bearings and combine with trail density.
+    Returns the bearing (degrees) toward the best combined score.
     """
     coords = []
     bearings = []
@@ -80,14 +105,105 @@ async def _find_uphill_bearing(lat: float, lng: float, radius_km: float) -> floa
 
     elevations = await _batch_elevation_query(coords)
 
-    best_bearing = random.uniform(0, 360)  # fallback if all elevations fail
-    best_elev = -float("inf")
+    # Normalize elevations to 0..1
+    valid_elevs = [e for e in elevations if e is not None]
+    min_elev = min(valid_elevs) if valid_elevs else 0
+    max_elev = max(valid_elevs) if valid_elevs else 0
+    elev_range = max_elev - min_elev if max_elev > min_elev else 1.0
+
+    best_bearing = random.uniform(0, 360)
+    best_score = -float("inf")
     for bearing_deg, elev in zip(bearings, elevations):
-        if elev is not None and elev > best_elev:
-            best_elev = elev
+        elev_score = ((elev - min_elev) / elev_range) if elev is not None else 0.0
+        trail_score = _trail_density_in_cone(lat, lng, bearing_deg, radius_km * 1.5, trail_attractors)
+
+        if trail_attractors:
+            score = 0.6 * elev_score + 0.4 * trail_score
+        else:
+            score = elev_score
+
+        if score > best_score:
+            best_score = score
             best_bearing = bearing_deg
 
     return best_bearing
+
+
+def _find_trail_bearing(
+    lat: float, lng: float, trail_attractors: list[tuple[float, float]]
+) -> float | None:
+    """Find the bearing toward the densest cluster of trail attractors."""
+    if not trail_attractors:
+        return None
+
+    sector_size = 360.0 / NUM_SCOUT_BEARINGS
+    counts = [0] * NUM_SCOUT_BEARINGS
+
+    for a_lat, a_lng in trail_attractors:
+        b = geo_bearing(lat, lng, a_lat, a_lng)
+        idx = int(b / sector_size) % NUM_SCOUT_BEARINGS
+        counts[idx] += 1
+
+    max_count = max(counts)
+    if max_count == 0:
+        return None
+
+    best_idx = counts.index(max_count)
+    return best_idx * sector_size + sector_size / 2
+
+
+def _trail_density_in_cone(
+    lat: float,
+    lng: float,
+    bearing_deg: float,
+    radius_km: float,
+    trail_attractors: list[tuple[float, float]],
+    half_angle: float = 15.0,
+) -> float:
+    """Count attractors within a directional cone, normalized to 0..1."""
+    if not trail_attractors:
+        return 0.0
+
+    count = 0
+    for a_lat, a_lng in trail_attractors:
+        dist = haversine(lat, lng, a_lat, a_lng)
+        if dist > radius_km:
+            continue
+        b = geo_bearing(lat, lng, a_lat, a_lng)
+        diff = abs(b - bearing_deg)
+        if diff > 180:
+            diff = 360 - diff
+        if diff <= half_angle:
+            count += 1
+
+    return min(count / 10.0, 1.0)
+
+
+def _snap_toward_trail(
+    wp_lat: float,
+    wp_lng: float,
+    trail_attractors: list[tuple[float, float]],
+    strength: float = 0.4,
+    max_dist_km: float = 2.0,
+) -> tuple[float, float]:
+    """Interpolate a waypoint toward the nearest trail attractor."""
+    if not trail_attractors:
+        return wp_lat, wp_lng
+
+    nearest_dist = float("inf")
+    nearest = None
+    for a_lat, a_lng in trail_attractors:
+        d = haversine(wp_lat, wp_lng, a_lat, a_lng)
+        if d < nearest_dist:
+            nearest_dist = d
+            nearest = (a_lat, a_lng)
+
+    if nearest is None or nearest_dist > max_dist_km:
+        return wp_lat, wp_lng
+
+    new_lat = wp_lat + strength * (nearest[0] - wp_lat)
+    new_lng = wp_lng + strength * (nearest[1] - wp_lng)
+    return new_lat, new_lng
 
 
 async def _generate_loop(
@@ -96,6 +212,7 @@ async def _generate_loop(
     distance_km: float,
     uphill_bearing: float | None = None,
     elevation_target: float | None = None,
+    trail_attractors: list[tuple[float, float]] | None = None,
 ) -> dict:
     """
     Waypoint Fan algorithm for loop routes.
@@ -122,7 +239,8 @@ async def _generate_loop(
 
     for _ in range(MAX_ITERATIONS):
         waypoints = _compute_loop_waypoints(
-            lat, lng, radius_km, base_angle, elongation, uphill_bearing
+            lat, lng, radius_km, base_angle, elongation, uphill_bearing,
+            trail_attractors=trail_attractors or [],
         )
         result = await valhalla_client.route(waypoints)
         actual_km = result["distance_km"]
@@ -162,6 +280,7 @@ async def _generate_out_and_back(
     distance_km: float,
     uphill_bearing: float | None = None,
     elevation_target: float | None = None,
+    trail_attractors: list[tuple[float, float]] | None = None,
 ) -> dict:
     """
     Out-and-back: one waypoint in the uphill direction.
@@ -180,6 +299,8 @@ async def _generate_out_and_back(
 
     for _ in range(MAX_ITERATIONS):
         wp_lat, wp_lng = destination_point(lat, lng, bearing_deg, target_straight)
+        if trail_attractors:
+            wp_lat, wp_lng = _snap_toward_trail(wp_lat, wp_lng, trail_attractors, strength=0.5)
         waypoints = [(lat, lng), (wp_lat, wp_lng), (lat, lng)]
         result = await valhalla_client.route(waypoints)
         actual_km = result["distance_km"]
@@ -216,12 +337,14 @@ def _compute_loop_waypoints(
     base_angle: float,
     elongation: float = 1.0,
     uphill_bearing: float | None = None,
+    trail_attractors: list[tuple[float, float]] | None = None,
 ) -> list[tuple[float, float]]:
     """
     Place waypoints around start point.
 
     When elongation > 1, waypoints facing the uphill_bearing are pushed further out,
     creating an elongated shape that reaches higher up the mountain.
+    When trail_attractors are provided, each waypoint is snapped toward the nearest trail.
     """
     waypoints = [(lat, lng)]
     angle_step = 360.0 / NUM_WAYPOINTS
@@ -237,6 +360,12 @@ def _compute_loop_waypoints(
             wp_radius = radius_km
 
         wp_lat, wp_lng = destination_point(lat, lng, angle, wp_radius)
+
+        if trail_attractors:
+            wp_lat, wp_lng = _snap_toward_trail(
+                wp_lat, wp_lng, trail_attractors, strength=0.4, max_dist_km=radius_km
+            )
+
         waypoints.append((wp_lat, wp_lng))
     waypoints.append((lat, lng))  # close the loop
     return waypoints

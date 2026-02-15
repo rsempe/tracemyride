@@ -10,6 +10,7 @@ class GenerateRequest(BaseModel):
     distance_km: float = Field(..., gt=0, le=100)
     loop: bool = True
     elevation_target: float | None = Field(None, ge=0, description="Target elevation gain in meters")
+    prefer_trails: bool = Field(True, description="Bias waypoints toward OSM marked trails")
 
 
 class ElevationRequest(BaseModel):

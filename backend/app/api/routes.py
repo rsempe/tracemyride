@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.route import Route
+from app.schemas.explore import ExploreRequest
 from app.schemas.route import (
     ElevationRequest,
     GenerateRequest,
@@ -22,9 +23,27 @@ from app.schemas.route import (
 )
 from app.services import elevation_service, valhalla_client
 from app.services.elevation_service import compute_elevation_stats
+from app.services.overpass_client import OverpassError, explore_routes
 from app.services.route_generator import generate_route
 
 router = APIRouter(prefix="/api/v1")
+
+
+@router.post("/explore")
+async def explore(req: ExploreRequest):
+    try:
+        result = await explore_routes(
+            lat=req.lat,
+            lng=req.lng,
+            radius_km=req.radius_km,
+            route_types=req.route_types,
+        )
+        return result
+    except OverpassError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        logger.exception("Explore routes failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/generate")
@@ -36,6 +55,7 @@ async def generate(req: GenerateRequest):
             distance_km=req.distance_km,
             loop=req.loop,
             elevation_target=req.elevation_target,
+            prefer_trails=req.prefer_trails,
         )
         return result
     except valhalla_client.ValhallaError as e:
